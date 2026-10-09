@@ -1,0 +1,86 @@
+
+`timescale 1ns/1ps
+
+module tb_spi_master;
+
+    parameter CLK_DIV = 4;
+
+    reg clk;
+    reg rst;
+    reg start;
+    reg [7:0] tx_data;
+    reg miso;
+
+    wire [7:0] rx_data;
+    wire busy;
+    wire done;
+    wire sclk;
+    wire mosi;
+    wire cs_n;
+
+    reg [7:0] expected_rx;
+    reg [7:0] received_tx;
+    integer i;
+
+    spi_master #(
+        .CLK_DIV(CLK_DIV)
+    ) dut (
+        .clk(clk),
+        .rst(rst),
+        .start(start),
+        .tx_data(tx_data),
+        .rx_data(rx_data),
+        .busy(busy),
+        .done(done),
+        .sclk(sclk),
+        .mosi(mosi),
+        .miso(miso),
+        .cs_n(cs_n)
+    );
+
+    always #5 clk = ~clk;
+
+    initial begin
+        clk = 0;
+        rst = 1;
+        start = 0;
+        tx_data = 8'hA5;
+        miso = 0;
+        expected_rx = 8'h3C;
+
+        $dumpfile("spi_master.vcd");
+        $dumpvars(0, tb_spi_master);
+
+        repeat (3) @(posedge clk);
+        rst = 0;
+
+        repeat (2) @(negedge clk);
+        start = 1;
+        @(negedge clk);
+        start = 0;
+
+        wait (cs_n == 0);
+
+        for (i = 7; i >= 0; i = i - 1) begin
+            wait (sclk == 0);
+            miso = expected_rx[i];
+            wait (sclk == 1);
+            wait (sclk == 0);
+        end
+
+        wait (done == 1);
+
+        $display("TX Data: %h", tx_data);
+        $display("Expected RX Data: %h", expected_rx);
+        $display("Actual RX Data: %h", rx_data);
+
+        if (rx_data === expected_rx)
+            $display("TEST PASSED");
+        else
+            $display("TEST FAILED");
+
+        #20;
+        $finish;
+    end
+
+endmodule
